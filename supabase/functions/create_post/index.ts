@@ -2,8 +2,14 @@
 
 import "@supabase/functions-js/edge-runtime.d.ts"
 import { supabase } from "../../lib/supabaseClient.ts"
+import { bucket, password } from "../../lib/data.ts"
 
-const BUCKET = "post-images"
+const BUCKET = bucket
+const REQUEST_PASSWORD = password
+const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+const ACCEPTED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"]
+const MAX_IMAGE_MB = 3
+const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024
 
 function generateUUID() {
   return crypto.randomUUID()
@@ -44,6 +50,22 @@ function isTransientError(error: any) {
   return false
 }
 
+function validateImageFile(file: File) {
+  const ext = `.${file.name.split(".").pop() ?? ""}`.toLowerCase()
+
+  if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+    throw new Error(`INVALID_IMAGE_MIME:${file.name}`)
+  }
+
+  if (!ACCEPTED_MIME_TYPES.includes(file.type)) {
+    throw new Error(`INVALID_IMAGE_MIME:${file.name}`)
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error(`IMAGE_TOO_LARGE:${file.name}`)
+  }
+}
+
 async function uploadFile(path: string, file: File) {
 
   const { error } = await supabase
@@ -51,7 +73,19 @@ async function uploadFile(path: string, file: File) {
     .from(BUCKET)
     .upload(path, file)
 
-  if (error) throw error
+  if (error) {
+    const message = String(error.message ?? "").toLowerCase()
+
+    if (message.includes("mime") || message.includes("content type")) {
+      throw new Error(`INVALID_IMAGE_MIME:${file.name}`)
+    }
+
+    if (message.includes("size") && (message.includes("limit") || message.includes("exceed"))) {
+      throw new Error(`IMAGE_TOO_LARGE:${file.name}`)
+    }
+
+    throw error
+  }
 }
 
 async function deleteFiles(paths: string[]) {
@@ -65,6 +99,8 @@ async function deleteFiles(paths: string[]) {
 }
 
 async function uploadBanner(postId: string, banner: File) {
+
+  validateImageFile(banner)
 
   const ext = banner.name.split(".").pop()
 
@@ -83,6 +119,8 @@ async function uploadContentImages(postId: string, files: File[]) {
   const usedNames = new Set<string>()
 
   for (const file of files) {
+
+    validateImageFile(file)
 
     const ext = file.name.split(".").pop()
 
@@ -179,6 +217,7 @@ Deno.serve(async (req) => {
     const title = form.get("title")
     const preview = form.get("preview")
     const contentMarkdown = form.get("content_markdown")
+    const password = form.get("password")
 
     const banner = form.get("banner")
     const images = form.getAll("images")
@@ -192,6 +231,7 @@ Deno.serve(async (req) => {
       typeof title !== "string" ||
       typeof preview !== "string" ||
       typeof contentMarkdown !== "string" ||
+      typeof password !== "string" ||
       !(banner instanceof File) ||
       imageFiles.length !== images.length
     ) {
@@ -201,6 +241,18 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
+          headers: { "Content-Type": "application/json" }
+        }
+      )
+    }
+
+    if (password !== REQUEST_PASSWORD) {
+      return new Response(
+        JSON.stringify({
+          error: "INVALID_PASSWORD"
+        }),
+        {
+          status: 401,
           headers: { "Content-Type": "application/json" }
         }
       )
@@ -296,6 +348,34 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: "Nomes de imagens duplicados"
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        }
+      )
+    }
+
+    const invalidMimeMatch = /^INVALID_IMAGE_MIME:(.+)$/.exec(err.message)
+    if (invalidMimeMatch) {
+      const fileName = invalidMimeMatch[1].trim()
+      return new Response(
+        JSON.stringify({
+          error: `imagem ${fileName} nao e de um formato aceito. Formatos aceitos: ${ACCEPTED_EXTENSIONS.join(", ")}`
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        }
+      )
+    }
+
+    const tooLargeMatch = /^IMAGE_TOO_LARGE:(.+)$/.exec(err.message)
+    if (tooLargeMatch) {
+      const fileName = tooLargeMatch[1].trim()
+      return new Response(
+        JSON.stringify({
+          error: `imagem ${fileName} ultrapassa o limite de ${MAX_IMAGE_MB}mb de tamanho`
         }),
         {
           status: 400,
