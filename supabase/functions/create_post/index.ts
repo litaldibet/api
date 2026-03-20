@@ -1,197 +1,24 @@
 // deno-lint-ignore-file no-explicit-any
 
 import "@supabase/functions-js/edge-runtime.d.ts"
-import { supabase } from "../../lib/supabaseClient.ts"
-import { bucket, password } from "../../lib/data.ts"
-
-const BUCKET = bucket
-const REQUEST_PASSWORD = password
-const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
-const ACCEPTED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"]
-const MAX_IMAGE_MB = 3
-const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024
-
-function generateUUID() {
-  return crypto.randomUUID()
-}
-
-function slugify(title: string) {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
-
-function isTransientError(error: any) {
-  const message = String(error?.message ?? "").toLowerCase()
-  const code = String(error?.code ?? "").toUpperCase()
-  const status = Number(error?.status ?? 0)
-
-  if ([502, 503, 504].includes(status)) return true
-
-  if (
-    message.includes("timeout") ||
-    message.includes("timed out") ||
-    message.includes("network") ||
-    message.includes("connection")
-  ) {
-    return true
-  }
-
-  if (["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"].includes(code)) {
-    return true
-  }
-
-  return false
-}
-
-function validateImageFile(file: File) {
-  const ext = `.${file.name.split(".").pop() ?? ""}`.toLowerCase()
-
-  if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-    throw new Error(`INVALID_IMAGE_MIME:${file.name}`)
-  }
-
-  if (!ACCEPTED_MIME_TYPES.includes(file.type)) {
-    throw new Error(`INVALID_IMAGE_MIME:${file.name}`)
-  }
-
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error(`IMAGE_TOO_LARGE:${file.name}`)
-  }
-}
-
-async function uploadFile(path: string, file: File) {
-
-  const { error } = await supabase
-    .storage
-    .from(BUCKET)
-    .upload(path, file)
-
-  if (error) {
-    const message = String(error.message ?? "").toLowerCase()
-
-    if (message.includes("mime") || message.includes("content type")) {
-      throw new Error(`INVALID_IMAGE_MIME:${file.name}`)
-    }
-
-    if (message.includes("size") && (message.includes("limit") || message.includes("exceed"))) {
-      throw new Error(`IMAGE_TOO_LARGE:${file.name}`)
-    }
-
-    throw error
-  }
-}
-
-async function deleteFiles(paths: string[]) {
-
-  if (paths.length === 0) return
-
-  await supabase
-    .storage
-    .from(BUCKET)
-    .remove(paths)
-}
-
-async function uploadBanner(postId: string, banner: File) {
-
-  validateImageFile(banner)
-
-  const ext = banner.name.split(".").pop()
-
-  if (!ext) throw new Error("INVALID_BANNER_EXTENSION")
-
-  const path = `${postId}/banner.${ext}`
-
-  await uploadFile(path, banner)
-
-  return path
-}
-
-async function uploadContentImages(postId: string, files: File[]) {
-
-  const paths: Record<string, string> = {}
-  const usedNames = new Set<string>()
-
-  for (const file of files) {
-
-    validateImageFile(file)
-
-    const ext = file.name.split(".").pop()
-
-    if (!ext) throw new Error("INVALID_IMAGE_EXTENSION")
-
-    const shortName = file.name.split(".")[0]
-
-    if (usedNames.has(shortName)) {
-      throw new Error("DUPLICATE_IMAGE_NAME")
-    }
-
-    const path = `${postId}/${shortName}.${ext}`
-
-    await uploadFile(path, file)
-
-    paths[shortName] = path
-    usedNames.add(shortName)
-  }
-
-  return paths
-}
-
-function replaceImagePaths(
-  markdown: string,
-  paths: Record<string, string>
-) {
-
-  let result = markdown
-
-  for (const [name, path] of Object.entries(paths)) {
-
-    const safeName = escapeRegExp(name)
-    const regex = new RegExp(`\\(${safeName}\\)`, "g")
-
-    result = result.replace(regex, `(${path})`)
-  }
-
-  return result
-}
-
-async function insertPostWithRetry(postData: any, retries = 3) {
-
-  for (let i = 0; i < retries; i++) {
-
-    const { error } = await supabase
-      .from("posts")
-      .insert(postData)
-
-    if (!error) return postData.id
-
-    if (error.message.includes("posts_pkey")) {
-      throw new Error("UUID_COLLISION")
-    }
-
-    if (
-      error.message.includes("posts_slug_unique") ||
-      error.message.includes("posts_title_unique")
-    ) {
-
-      throw new Error("TITLE_OR_SLUG_ALREADY_EXISTS")
-    }
-
-    if (isTransientError(error)) {
-      continue
-    }
-
-    throw error
-  }
-
-  throw new Error("TRANSIENT_ERROR_RETRY_FAILED")
-}
+import {
+  ACCEPTED_EXTENSIONS,
+  MAX_IMAGE_MB,
+  REQUEST_PASSWORD,
+  deleteFiles,
+  generateUUID,
+  insertPostWithRetry,
+  replaceImagePaths,
+  slugify,
+  uploadBanner,
+  uploadContentImages
+} from "../../lib/auxiliaryFunctions.ts"
+import {
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+  buildImageTooLargeMessage,
+  buildInvalidImageMimeMessage
+} from "../../lib/errorMessages.ts"
 
 Deno.serve(async (req) => {
 
@@ -202,7 +29,7 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") {
       return new Response(
         JSON.stringify({
-          error: "METHOD_NOT_ALLOWED"
+          error: ERROR_MESSAGES.METHOD_NOT_ALLOWED
         }),
         {
           status: 405,
@@ -237,7 +64,7 @@ Deno.serve(async (req) => {
     ) {
       return new Response(
         JSON.stringify({
-          error: "INVALID_FORM_DATA"
+          error: ERROR_MESSAGES.INVALID_FORM_DATA
         }),
         {
           status: 400,
@@ -249,7 +76,7 @@ Deno.serve(async (req) => {
     if (password !== REQUEST_PASSWORD) {
       return new Response(
         JSON.stringify({
-          error: "INVALID_PASSWORD"
+          error: ERROR_MESSAGES.WRONG_PASSWORD
         }),
         {
           status: 401,
@@ -261,7 +88,7 @@ Deno.serve(async (req) => {
     if (imageFiles.length === 0) {
       return new Response(
         JSON.stringify({
-          error: "MISSING_IMAGES"
+          error: ERROR_MESSAGES.MISSING_IMAGES
         }),
         {
           status: 400,
@@ -277,7 +104,7 @@ Deno.serve(async (req) => {
     if (!slug) {
       return new Response(
         JSON.stringify({
-          error: "INVALID_TITLE"
+          error: ERROR_MESSAGES.INVALID_TITLE
         }),
         {
           status: 400,
@@ -315,6 +142,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        message: SUCCESS_MESSAGES.POST_CREATED,
         id: finalId
       }),
       {
@@ -335,7 +163,7 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({
-          error: "Título ou slug já existem"
+          error: ERROR_MESSAGES.TITLE_OR_SLUG_ALREADY_EXISTS
         }),
         {
           status: 409,
@@ -347,7 +175,7 @@ Deno.serve(async (req) => {
     if (err.message === "DUPLICATE_IMAGE_NAME") {
       return new Response(
         JSON.stringify({
-          error: "Nomes de imagens duplicados"
+          error: ERROR_MESSAGES.DUPLICATE_IMAGE_NAME
         }),
         {
           status: 400,
@@ -361,7 +189,7 @@ Deno.serve(async (req) => {
       const fileName = invalidMimeMatch[1].trim()
       return new Response(
         JSON.stringify({
-          error: `imagem ${fileName} nao e de um formato aceito. Formatos aceitos: ${ACCEPTED_EXTENSIONS.join(", ")}`
+          error: buildInvalidImageMimeMessage(fileName, ACCEPTED_EXTENSIONS)
         }),
         {
           status: 400,
@@ -375,7 +203,7 @@ Deno.serve(async (req) => {
       const fileName = tooLargeMatch[1].trim()
       return new Response(
         JSON.stringify({
-          error: `imagem ${fileName} ultrapassa o limite de ${MAX_IMAGE_MB}mb de tamanho`
+          error: buildImageTooLargeMessage(fileName, MAX_IMAGE_MB)
         }),
         {
           status: 400,
@@ -390,7 +218,7 @@ Deno.serve(async (req) => {
     ) {
       return new Response(
         JSON.stringify({
-          error: "Extensao de arquivo invalida"
+          error: ERROR_MESSAGES.INVALID_EXTENSION
         }),
         {
           status: 400,
@@ -402,7 +230,7 @@ Deno.serve(async (req) => {
     if (err.message === "UUID_COLLISION") {
       return new Response(
         JSON.stringify({
-          error: "Erro ao gerar identificador, tente novamente"
+          error: ERROR_MESSAGES.UUID_COLLISION
         }),
         {
           status: 500,
@@ -414,7 +242,7 @@ Deno.serve(async (req) => {
     if (err.message === "TRANSIENT_ERROR_RETRY_FAILED") {
       return new Response(
         JSON.stringify({
-          error: "Falha temporaria de conexao"
+          error: ERROR_MESSAGES.TRANSIENT_ERROR_RETRY_FAILED
         }),
         {
           status: 503,

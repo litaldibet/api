@@ -1,52 +1,12 @@
 // deno-lint-ignore-file no-explicit-any
 import "@supabase/functions-js/edge-runtime.d.ts"
 import { supabase } from "../../lib/supabaseClient.ts"
-import { bucket, password } from "../../lib/data.ts"
-
-const BUCKET = bucket
-const REQUEST_PASSWORD = password
-
-const LIST_LIMIT = 100
-
-async function listAllPostFiles(postId: string) {
-  const allFiles: Array<{ name: string }> = []
-  let offset = 0
-
-  while (true) {
-    const { data, error } = await supabase
-      .storage
-      .from(BUCKET)
-      .list(postId, { limit: LIST_LIMIT, offset })
-
-    if (error) throw error
-
-    if (!data || data.length === 0) break
-
-    allFiles.push(...data)
-
-    if (data.length < LIST_LIMIT) break
-
-    offset += LIST_LIMIT
-  }
-
-  return allFiles
-}
-
-async function deletePostFiles(postId: string) {
-
-  const files = await listAllPostFiles(postId)
-
-  if (!files || files.length === 0) return
-
-  const paths = files.map(file => `${postId}/${file.name}`)
-
-  const { error: removeError } = await supabase
-    .storage
-    .from(BUCKET)
-    .remove(paths)
-
-  if (removeError) throw removeError
-}
+import {
+  REQUEST_PASSWORD,
+  deleteFiles,
+  listAllPostFiles
+} from "../../lib/auxiliaryFunctions.ts"
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "../../lib/errorMessages.ts"
 
 Deno.serve(async (req) => {
 
@@ -54,7 +14,7 @@ Deno.serve(async (req) => {
 
     if (req.method !== "DELETE") {
       return new Response(
-        JSON.stringify({ error: "METHOD_NOT_ALLOWED" }),
+        JSON.stringify({ error: ERROR_MESSAGES.METHOD_NOT_ALLOWED }),
         { status: 405, headers: { "Content-Type": "application/json" } }
       )
     }
@@ -65,7 +25,7 @@ Deno.serve(async (req) => {
       body = await req.json()
     } catch {
       return new Response(
-        JSON.stringify({ error: "INVALID_JSON" }),
+        JSON.stringify({ error: ERROR_MESSAGES.INVALID_JSON }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       )
     }
@@ -74,21 +34,21 @@ Deno.serve(async (req) => {
 
     if (!id || typeof id !== "string") {
       return new Response(
-        JSON.stringify({ error: "INVALID_ID" }),
+        JSON.stringify({ error: ERROR_MESSAGES.INVALID_ID }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       )
     }
 
     if (!requestPassword || typeof requestPassword !== "string") {
       return new Response(
-        JSON.stringify({ error: "INVALID_PASSWORD" }),
+        JSON.stringify({ error: ERROR_MESSAGES.INVALID_PASSWORD }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       )
     }
 
     if (requestPassword !== REQUEST_PASSWORD) {
       return new Response(
-        JSON.stringify({ error: "SENHA_ERRADA" }),
+        JSON.stringify({ error: ERROR_MESSAGES.WRONG_PASSWORD }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       )
     }
@@ -101,12 +61,15 @@ Deno.serve(async (req) => {
 
     if (fetchError || !post) {
       return new Response(
-        JSON.stringify({ error: "POST_NOT_FOUND" }),
+        JSON.stringify({ error: ERROR_MESSAGES.POST_NOT_FOUND }),
         { status: 404, headers: { "Content-Type": "application/json" } }
       )
     }
 
-    await deletePostFiles(id)
+    const files = await listAllPostFiles(id)
+    const paths = files.map(file => `${id}/${file.name}`)
+
+    await deleteFiles(paths)
 
     const { error: deleteError } = await supabase
       .from("posts")
@@ -116,7 +79,10 @@ Deno.serve(async (req) => {
     if (deleteError) throw deleteError
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({
+        success: true,
+        message: SUCCESS_MESSAGES.POST_DELETED
+      }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     )
 
