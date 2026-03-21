@@ -7,15 +7,20 @@ import {
   listAllPostFiles
 } from "../../lib/auxiliaryFunctions.ts"
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "../../lib/errorMessages.ts"
+import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
 
 Deno.serve(async (req) => {
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders })
+  }
 
   try {
 
     if (req.method !== "DELETE") {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.METHOD_NOT_ALLOWED }),
-        { status: 405, headers: { "Content-Type": "application/json" } }
+        { status: 405, headers: jsonHeaders }
       )
     }
 
@@ -26,7 +31,7 @@ Deno.serve(async (req) => {
     } catch {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_JSON }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
@@ -35,21 +40,21 @@ Deno.serve(async (req) => {
     if (!id || typeof id !== "string") {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_ID }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
     if (!requestPassword || typeof requestPassword !== "string") {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_PASSWORD }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: jsonHeaders }
       )
     }
 
     if (requestPassword !== REQUEST_PASSWORD) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.WRONG_PASSWORD }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: jsonHeaders }
       )
     }
 
@@ -62,14 +67,12 @@ Deno.serve(async (req) => {
     if (fetchError || !post) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.POST_NOT_FOUND }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
+        { status: 404, headers: jsonHeaders }
       )
     }
 
     const files = await listAllPostFiles(id)
     const paths = files.map(file => `${id}/${file.name}`)
-
-    await deleteFiles(paths)
 
     const { error: deleteError } = await supabase
       .from("posts")
@@ -78,19 +81,26 @@ Deno.serve(async (req) => {
 
     if (deleteError) throw deleteError
 
+    // Storage cleanup is best-effort. The source of truth is removing the post row.
+    try {
+      await deleteFiles(paths)
+    } catch (storageError) {
+      console.error("Failed to cleanup post files after DB deletion", storageError)
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         message: SUCCESS_MESSAGES.POST_DELETED
       }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      { status: 200, headers: jsonHeaders }
     )
 
   } catch (err: any) {
 
     return new Response(
       JSON.stringify({ error: err.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: jsonHeaders }
     )
 
   }

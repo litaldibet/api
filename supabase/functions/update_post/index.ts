@@ -19,17 +19,23 @@ import {
   buildImageTooLargeMessage,
   buildInvalidImageMimeMessage
 } from "../../lib/errorMessages.ts"
+import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
 
 Deno.serve(async (req) => {
 
   const uploadedPaths: string[] = []
+  const existingPathsBeforeUpdate = new Set<string>()
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders })
+  }
 
   try {
 
     if (req.method !== "PUT") {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.METHOD_NOT_ALLOWED }),
-        { status: 405, headers: { "Content-Type": "application/json" } }
+        { status: 405, headers: jsonHeaders }
       )
     }
 
@@ -60,14 +66,14 @@ Deno.serve(async (req) => {
     ) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_FORM_DATA }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
     if (password !== REQUEST_PASSWORD) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.WRONG_PASSWORD }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: jsonHeaders }
       )
     }
 
@@ -80,7 +86,7 @@ Deno.serve(async (req) => {
     if (fetchError || !existingPost) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.POST_NOT_FOUND }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
+        { status: 404, headers: jsonHeaders }
       )
     }
 
@@ -89,12 +95,16 @@ Deno.serve(async (req) => {
     if (!slug) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_TITLE }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
     const existingFiles = await listAllPostFiles(id)
     const existingPaths = existingFiles.map(file => `${id}/${file.name}`)
+
+    for (const path of existingPaths) {
+      existingPathsBeforeUpdate.add(path)
+    }
 
     const bannerPath = await uploadBanner(id, banner, {
       upsert: true,
@@ -153,14 +163,15 @@ Deno.serve(async (req) => {
       }),
       {
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: jsonHeaders
       }
     )
 
   } catch (err: any) {
 
     try {
-      await deleteFiles(uploadedPaths)
+      const cleanupPaths = uploadedPaths.filter(path => !existingPathsBeforeUpdate.has(path))
+      await deleteFiles(cleanupPaths)
     } catch (cleanupError) {
       console.error("Failed cleanup", cleanupError)
     }
@@ -168,14 +179,14 @@ Deno.serve(async (req) => {
     if (err.message === "TITLE_OR_SLUG_ALREADY_EXISTS") {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.TITLE_OR_SLUG_ALREADY_EXISTS }),
-        { status: 409, headers: { "Content-Type": "application/json" } }
+        { status: 409, headers: jsonHeaders }
       )
     }
 
     if (err.message === "DUPLICATE_IMAGE_NAME") {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.DUPLICATE_IMAGE_NAME }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
@@ -186,7 +197,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: buildInvalidImageMimeMessage(fileName, ACCEPTED_EXTENSIONS)
         }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
@@ -197,7 +208,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: buildImageTooLargeMessage(fileName, MAX_IMAGE_MB)
         }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
@@ -207,13 +218,13 @@ Deno.serve(async (req) => {
     ) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_EXTENSION }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       )
     }
 
     return new Response(
       JSON.stringify({ error: err.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: jsonHeaders }
     )
   }
 })
