@@ -19,10 +19,15 @@ import {
   buildImageTooLargeMessage,
   buildInvalidImageMimeMessage
 } from "../../lib/errorMessages.ts"
+import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
 
 Deno.serve(async (req) => {
 
   const uploadedPaths: string[] = []
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders })
+  }
 
   try {
 
@@ -33,7 +38,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 405,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -68,7 +73,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -80,7 +85,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 401,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -92,7 +97,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -108,7 +113,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -147,7 +152,7 @@ Deno.serve(async (req) => {
       }),
       {
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: jsonHeaders
       }
     )
 
@@ -167,7 +172,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 409,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -179,7 +184,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -193,7 +198,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -207,7 +212,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -222,7 +227,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -234,7 +239,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 500,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -246,7 +251,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 503,
-          headers: { "Content-Type": "application/json" }
+          headers: jsonHeaders
         }
       )
     }
@@ -257,7 +262,7 @@ Deno.serve(async (req) => {
       }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" }
+        headers: jsonHeaders
       }
     )
   }
