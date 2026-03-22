@@ -61,9 +61,18 @@ Deno.serve(async (req) => {
       typeof preview !== "string" ||
       typeof contentMarkdown !== "string" ||
       typeof password !== "string" ||
-      !(banner instanceof File) ||
+      (banner !== null && !(banner instanceof File)) ||
       imageFiles.length !== images.length
     ) {
+      return new Response(
+        JSON.stringify({ error: ERROR_MESSAGES.INVALID_FORM_DATA }),
+        { status: 400, headers: jsonHeaders }
+      )
+    }
+
+    const normalizedCategory = normalizePostType(category)
+
+    if (!normalizedCategory) {
       return new Response(
         JSON.stringify({ error: ERROR_MESSAGES.INVALID_FORM_DATA }),
         { status: 400, headers: jsonHeaders }
@@ -79,7 +88,7 @@ Deno.serve(async (req) => {
 
     const { data: existingPost, error: fetchError } = await supabase
       .from("posts")
-      .select("id")
+      .select("id, banner_path")
       .eq("id", id)
       .single()
 
@@ -106,11 +115,15 @@ Deno.serve(async (req) => {
       existingPathsBeforeUpdate.add(path)
     }
 
-    const bannerPath = await uploadBanner(id, banner, {
-      upsert: true,
-      mapErrors: false
-    })
-    uploadedPaths.push(bannerPath)
+    let bannerPath = existingPost.banner_path
+
+    if (banner instanceof File) {
+      bannerPath = await uploadBanner(id, banner, {
+        upsert: true,
+        mapErrors: false
+      })
+      uploadedPaths.push(bannerPath)
+    }
 
     const contentPaths = await uploadContentImages(id, imageFiles, {
       upsert: true,
@@ -126,7 +139,7 @@ Deno.serve(async (req) => {
     const { error: updateError } = await supabase
       .from("posts")
       .update({
-        post_type: category,
+        post_type: normalizedCategory,
         title,
         slug,
         banner_path: bannerPath,
@@ -228,3 +241,14 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+function normalizePostType(rawCategory: string): "BLOG" | "PROMOCAO" | null {
+  const normalized = rawCategory.trim().toUpperCase()
+  const mapped = normalized === "POST" ? "BLOG" : normalized
+
+  if (mapped === "BLOG" || mapped === "PROMOCAO") {
+    return mapped
+  }
+
+  return null
+}

@@ -143,7 +143,8 @@ export async function uploadBanner(
 
 	if (!ext) throw new Error("INVALID_BANNER_EXTENSION")
 
-	const path = `${postId}/banner.${ext}`
+	const version = Date.now()
+	const path = `${postId}/banner_${version}.${ext}`
 
 	await uploadFile(path, banner, options)
 

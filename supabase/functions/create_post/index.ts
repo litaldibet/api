@@ -78,6 +78,20 @@ Deno.serve(async (req) => {
       )
     }
 
+    const normalizedCategory = normalizePostType(category)
+
+    if (!normalizedCategory) {
+      return new Response(
+        JSON.stringify({
+          error: ERROR_MESSAGES.INVALID_FORM_DATA
+        }),
+        {
+          status: 400,
+          headers: jsonHeaders
+        }
+      )
+    }
+
     if (password !== REQUEST_PASSWORD) {
       return new Response(
         JSON.stringify({
@@ -85,18 +99,6 @@ Deno.serve(async (req) => {
         }),
         {
           status: 401,
-          headers: jsonHeaders
-        }
-      )
-    }
-
-    if (imageFiles.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: ERROR_MESSAGES.MISSING_IMAGES
-        }),
-        {
-          status: 400,
           headers: jsonHeaders
         }
       )
@@ -133,7 +135,7 @@ Deno.serve(async (req) => {
 
     const postData = {
       id: postId,
-      post_type: category,
+      post_type: normalizedCategory,
       title,
       slug,
       banner_path: bannerPath,
@@ -267,3 +269,14 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+function normalizePostType(rawCategory: string): "BLOG" | "PROMOCAO" | null {
+  const normalized = rawCategory.trim().toUpperCase()
+  const mapped = normalized === "POST" ? "BLOG" : normalized
+
+  if (mapped === "BLOG" || mapped === "PROMOCAO") {
+    return mapped
+  }
+
+  return null
+}

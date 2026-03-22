@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import "@supabase/functions-js/edge-runtime.d.ts"
+
 import { bucket } from "../../lib/data.ts"
 import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
 import { ERROR_MESSAGES } from "../../lib/errorMessages.ts"
@@ -45,15 +46,21 @@ Deno.serve(async (req) => {
     }
 
     const bannerUrl = buildPublicUrl(post.banner_path)
+    const imagePaths = await listPostImagePaths(post.id, post.banner_path)
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
+          id: post.id,
+          post_type: post.post_type,
           title: post.title,
+          preview: post.preview,
           slug: post.slug,
+          banner_path: post.banner_path,
           banner_url: bannerUrl,
-          content_markdown: post.content_markdown
+          content_markdown: post.content_markdown,
+          image_paths: imagePaths
         }
       }),
       {
@@ -79,5 +86,21 @@ function buildPublicUrl(path: string) {
     .getPublicUrl(path)
 
   return data.publicUrl
+}
+
+async function listPostImagePaths(postId: string, bannerPath: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .storage
+    .from(bucket)
+    .list(postId, { limit: 500, offset: 0 })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? [])
+    .filter((item) => item.name && !item.name.endsWith("/"))
+    .map((item) => `${postId}/${item.name}`)
+    .filter((path) => path !== bannerPath)
 }
 
