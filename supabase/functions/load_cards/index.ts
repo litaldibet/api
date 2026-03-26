@@ -1,7 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 
 import "@supabase/functions-js/edge-runtime.d.ts"
-import { bucket } from "../../lib/data.ts"
+import type { LoadCardsSuccessResponse, PostCard } from "@shared/contracts/loadCards.ts"
+import { POST_IMAGES_BUCKET } from "@shared/constants/storage.ts"
 import { ERROR_MESSAGES } from "../../lib/errorMessages.ts"
 import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
 import { supabase } from "../../lib/supabaseClient.ts"
@@ -28,7 +29,7 @@ Deno.serve(async (req) => {
 
     if (error) throw error
 
-    const cards = (posts ?? []).map((post) => ({
+    const cards: PostCard[] = (posts ?? []).map((post) => ({
       id: post.id,
       title: post.title,
       slug: post.slug,
@@ -37,11 +38,13 @@ Deno.serve(async (req) => {
       banner_url: buildPublicUrl(post.banner_path)
     }))
 
+    const payload: LoadCardsSuccessResponse = {
+      success: true,
+      data: cards,
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: cards
-      }),
+      JSON.stringify(payload),
       {
         status: 200,
         headers: jsonHeaders
@@ -61,7 +64,7 @@ Deno.serve(async (req) => {
 function buildPublicUrl(path: string) {
   const { data } = supabase
     .storage
-    .from(bucket)
+    .from(POST_IMAGES_BUCKET)
     .getPublicUrl(path)
 
   return data.publicUrl

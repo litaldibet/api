@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import "@supabase/functions-js/edge-runtime.d.ts"
+import type { DeletePostRequestBody } from "@shared/contracts/deletePost.ts"
 import { supabase } from "../../lib/supabaseClient.ts"
 import {
   REQUEST_PASSWORD,
@@ -24,7 +25,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    let body: any
+    let body: DeletePostRequestBody | null
 
     try {
       body = await req.json()

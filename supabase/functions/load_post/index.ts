@@ -2,7 +2,8 @@
 
 import "@supabase/functions-js/edge-runtime.d.ts"
 
-import { bucket } from "../../lib/data.ts"
+import type { LoadPostSuccessResponse, PostDetails } from "@shared/contracts/loadPost.ts"
+import { POST_IMAGES_BUCKET } from "@shared/constants/storage.ts"
 import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
 import { ERROR_MESSAGES } from "../../lib/errorMessages.ts"
 import { supabase } from "../../lib/supabaseClient.ts"
@@ -48,21 +49,25 @@ Deno.serve(async (req) => {
     const bannerUrl = buildPublicUrl(post.banner_path)
     const imagePaths = await listPostImagePaths(post.id, post.banner_path)
 
+    const postDetails: PostDetails = {
+      id: post.id,
+      post_type: post.post_type,
+      title: post.title,
+      preview: post.preview,
+      slug: post.slug,
+      banner_path: post.banner_path,
+      banner_url: bannerUrl,
+      content_markdown: post.content_markdown,
+      image_paths: imagePaths,
+    }
+
+    const payload: LoadPostSuccessResponse = {
+      success: true,
+      data: postDetails,
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          id: post.id,
-          post_type: post.post_type,
-          title: post.title,
-          preview: post.preview,
-          slug: post.slug,
-          banner_path: post.banner_path,
-          banner_url: bannerUrl,
-          content_markdown: post.content_markdown,
-          image_paths: imagePaths
-        }
-      }),
+      JSON.stringify(payload),
       {
         status: 200,
         headers: jsonHeaders
@@ -82,7 +87,7 @@ Deno.serve(async (req) => {
 function buildPublicUrl(path: string) {
   const { data } = supabase
     .storage
-    .from(bucket)
+    .from(POST_IMAGES_BUCKET)
     .getPublicUrl(path)
 
   return data.publicUrl
@@ -91,7 +96,7 @@ function buildPublicUrl(path: string) {
 async function listPostImagePaths(postId: string, bannerPath: string): Promise<string[]> {
   const { data, error } = await supabase
     .storage
-    .from(bucket)
+    .from(POST_IMAGES_BUCKET)
     .list(postId, { limit: 500, offset: 0 })
 
   if (error) {

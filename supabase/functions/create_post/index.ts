@@ -1,9 +1,9 @@
 // deno-lint-ignore-file no-explicit-any
 
 import "@supabase/functions-js/edge-runtime.d.ts"
+import { ACCEPTED_EXTENSIONS, MAX_IMAGE_MB } from "@shared/constants/images.ts"
+import { normalizePostCategory } from "@shared/domain/postCategory.ts"
 import {
-  ACCEPTED_EXTENSIONS,
-  MAX_IMAGE_MB,
   REQUEST_PASSWORD,
   deleteFiles,
   generateUUID,
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const normalizedCategory = normalizePostType(category)
+    const normalizedCategory = normalizePostCategory(category)
 
     if (!normalizedCategory) {
       return new Response(
@@ -269,14 +269,3 @@ Deno.serve(async (req) => {
     )
   }
 })
-
-function normalizePostType(rawCategory: string): "BLOG" | "PROMOCAO" | null {
-  const normalized = rawCategory.trim().toUpperCase()
-  const mapped = normalized === "POST" ? "BLOG" : normalized
-
-  if (mapped === "BLOG" || mapped === "PROMOCAO") {
-    return mapped
-  }
-
-  return null
-}

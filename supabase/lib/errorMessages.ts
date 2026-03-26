@@ -1,25 +1,9 @@
-export const ERROR_MESSAGES = {
-  METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
-  INVALID_FORM_DATA: "INVALID_FORM_DATA",
-  INVALID_JSON: "INVALID_JSON",
-  INVALID_ID: "INVALID_ID",
-  INVALID_PASSWORD: "INVALID_PASSWORD",
-  WRONG_PASSWORD: "SENHA_ERRADA",
-  POST_NOT_FOUND: "POST_NOT_FOUND",
-  INVALID_TITLE: "INVALID_TITLE",
-  MISSING_IMAGES: "MISSING_IMAGES",
-  DUPLICATE_IMAGE_NAME: "Nomes de imagens duplicados",
-  TITLE_OR_SLUG_ALREADY_EXISTS: "Titulo ou slug ja existem",
-  INVALID_EXTENSION: "Extensao de arquivo invalida",
-  UUID_COLLISION: "Erro ao gerar identificador, tente novamente",
-  TRANSIENT_ERROR_RETRY_FAILED: "Falha temporaria de conexao"
-} as const
+import { POST_ERROR_CODES } from "../../../shared/contracts/postErrorCodes.ts"
+import { POST_SUCCESS_CODES } from "../../../shared/contracts/postSuccessCodes.ts"
 
-export const SUCCESS_MESSAGES = {
-  POST_CREATED: "POST_CREATED",
-  POST_UPDATED: "POST_UPDATED",
-  POST_DELETED: "POST_DELETED"
-} as const
+export const ERROR_MESSAGES = POST_ERROR_CODES
+
+export const SUCCESS_MESSAGES = POST_SUCCESS_CODES
 
 export function buildInvalidImageMimeMessage(
   fileName: string,
