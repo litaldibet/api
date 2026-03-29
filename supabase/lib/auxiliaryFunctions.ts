@@ -1,13 +1,10 @@
 import { supabase } from "./supabaseClient.ts"
 import { bucket, password } from "./data.ts"
+import { ACCEPTED_MIME_TYPES, ACCEPTED_EXTENSIONS, MAX_IMAGE_MB, MAX_IMAGE_BYTES } from "../../../shared/constants/images.ts"
 
 const BUCKET = bucket
 
 export const REQUEST_PASSWORD = password
-export const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
-export const ACCEPTED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"]
-export const MAX_IMAGE_MB = 3
-export const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024
 export const LIST_LIMIT = 100
 
 export function generateUUID() {
