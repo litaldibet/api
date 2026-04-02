@@ -22,10 +22,18 @@ Deno.serve(async (req) => {
       )
     }
 
-    const { data: posts, error } = await supabase
+    const url = new URL(req.url)
+    const includeInactive = url.searchParams.get("include_inactive") === "true"
+
+    const cardsQuery = supabase
       .from("posts")
       .select("id, title, slug, preview, banner_path, post_type")
-      .eq("active", true)
+
+    if (!includeInactive) {
+      cardsQuery.eq("active", true)
+    }
+
+    const { data: posts, error } = await cardsQuery
 
     if (error) throw error
 
