@@ -1,3 +1,6 @@
 .vscode/
 node_modules/
 supabase/lib/data.ts
+supabase/.temp/
+.clj-kondo/
+.lsp/
