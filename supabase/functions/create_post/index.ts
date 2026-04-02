@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
     const title = form.get("title")
     const preview = form.get("preview")
     const contentMarkdown = form.get("content_markdown")
+    const active = form.get("active")
     const password = form.get("password")
 
     const banner = form.get("banner")
@@ -63,6 +64,7 @@ Deno.serve(async (req) => {
       typeof title !== "string" ||
       typeof preview !== "string" ||
       typeof contentMarkdown !== "string" ||
+      typeof active !== "string" ||
       typeof password !== "string" ||
       !(banner instanceof File) ||
       imageFiles.length !== images.length
@@ -81,6 +83,20 @@ Deno.serve(async (req) => {
     const normalizedCategory = normalizePostCategory(category)
 
     if (!normalizedCategory) {
+      return new Response(
+        JSON.stringify({
+          error: ERROR_MESSAGES.INVALID_FORM_DATA
+        }),
+        {
+          status: 400,
+          headers: jsonHeaders
+        }
+      )
+    }
+
+    const parsedActive = parseActiveValue(active)
+
+    if (parsedActive === null) {
       return new Response(
         JSON.stringify({
           error: ERROR_MESSAGES.INVALID_FORM_DATA
@@ -141,7 +157,7 @@ Deno.serve(async (req) => {
       banner_path: bannerPath,
       preview,
       content_markdown: finalMarkdown,
-      active: true
+      active: parsedActive
     }
 
     const finalId = await insertPostWithRetry(postData)
@@ -269,3 +285,17 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+function parseActiveValue(value: string): boolean | null {
+  const normalized = value.trim().toLowerCase()
+
+  if (normalized === "true") {
+    return true
+  }
+
+  if (normalized === "false") {
+    return false
+  }
+
+  return null
+}

@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
       post_type: post.post_type,
       title: post.title,
       preview: post.preview,
+      active: post.active,
       slug: post.slug,
       banner_path: post.banner_path,
       banner_url: bannerUrl,
