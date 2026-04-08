@@ -4,12 +4,20 @@ import "@supabase/functions-js/edge-runtime.d.ts"
 import type { LoadCardsSuccessResponse, PostCard } from "@shared/contracts/loadCards.ts"
 import { POST_IMAGES_BUCKET } from "@shared/constants/storage.ts"
 import { ERROR_MESSAGES } from "../../lib/errorMessages.ts"
-import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
+import { getCorsHeaders, getJsonHeaders, isOriginAllowed } from "../../lib/cors.ts"
 import { supabase } from "../../lib/supabaseClient.ts"
 
 Deno.serve(async (req) => {
 
+  const origin = req.headers.get("origin")
+  const corsHeaders = getCorsHeaders(origin)
+  const jsonHeaders = getJsonHeaders(origin)
+
   if (req.method === "OPTIONS") {
+    if (!isOriginAllowed(origin)) {
+      return new Response("Forbidden origin", { status: 403, headers: corsHeaders })
+    }
+
     return new Response("ok", { headers: corsHeaders })
   }
 

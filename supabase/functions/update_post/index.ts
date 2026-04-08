@@ -19,14 +19,22 @@ import {
   buildImageTooLargeMessage,
   buildInvalidImageMimeMessage
 } from "../../lib/errorMessages.ts"
-import { corsHeaders, jsonHeaders } from "../../lib/cors.ts"
+import { getCorsHeaders, getJsonHeaders, isOriginAllowed } from "../../lib/cors.ts"
 
 Deno.serve(async (req) => {
+
+  const origin = req.headers.get("origin")
+  const corsHeaders = getCorsHeaders(origin)
+  const jsonHeaders = getJsonHeaders(origin)
 
   const uploadedPaths: string[] = []
   const existingPathsBeforeUpdate = new Set<string>()
 
   if (req.method === "OPTIONS") {
+    if (!isOriginAllowed(origin)) {
+      return new Response("Forbidden origin", { status: 403, headers: corsHeaders })
+    }
+
     return new Response("ok", { headers: corsHeaders })
   }
 
