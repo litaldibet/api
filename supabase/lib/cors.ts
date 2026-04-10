@@ -10,9 +10,9 @@ function resolveAllowedOrigin(origin: string | null): string | null {
 
   try {
     const parsed = new URL(origin)
-    const hostname = parsed.hostname.toLowerCase()
+    const host = parsed.host.toLowerCase()
 
-    if (parsed.protocol === "https:" && ALLOWED_ORIGIN_HOSTS.has(hostname)) {
+    if (parsed.protocol === "https:" && ALLOWED_ORIGIN_HOSTS.has(host)) { 
       return `${parsed.protocol}//${parsed.host}`
     }
   } catch {
